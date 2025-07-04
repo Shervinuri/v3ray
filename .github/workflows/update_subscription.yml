@@ -3,8 +3,7 @@ name: Update SHEN Subscription File
 on:
   workflow_dispatch: # Allows manual triggering
   schedule:
-    - cron: '0 */1
-    * * *' # Runs every 6 hours
+    - cron: '0 */1 * * *' # Runs every hour
 
 jobs:
   update_subscription_job:

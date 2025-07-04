@@ -49,17 +49,36 @@ def process_vmess(config_link, new_name):
         return None
     try:
         base64_part = config_link[len('vmess://'):]
+        # Ensure base64_part is ASCII, otherwise b64decode will fail with non-ASCII chars
+        # However, the error "string argument should contain only ASCII characters" for b64decode
+        # usually implies the *input string itself* (base64_part) has non-ASCII chars,
+        # which it shouldn't if it's valid Base64.
+        # Let's add a specific catch for errors during b64decode.
+
         missing_padding = len(base64_part) % 4
         if missing_padding:
             base64_part += '=' * (4 - missing_padding)
         
-        decoded_json_str = base64.b64decode(base64_part).decode('utf-8')
+        decoded_json_str = base64.b64decode(base64_part).decode('utf-8') # This line can fail
         vmess_obj = json.loads(decoded_json_str)
         vmess_obj['ps'] = new_name
         new_json_str = json.dumps(vmess_obj, separators=(',', ':'))
         return 'vmess://' + base64.b64encode(new_json_str.encode('utf-8')).decode('utf-8')
+    except (TypeError, ValueError) as e: # Catches "string argument should contain only ASCII characters" from b64decode, among others
+        print(f"Base64 Decode Error or ValueError processing VMESS link {config_link[:80]}...: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        # This variable would not be defined if base64.b64decode failed, so we need to handle that.
+        decoded_str_preview = "Error during Base64 decoding, so decoded_json_str is not available."
+        try:
+            # Attempt to show part of the base64_part if decoded_json_str isn't available.
+            decoded_str_preview = f"Problematic Base64 part (first 100 chars): '{base64_part[:100]}'"
+        except NameError: # base64_part might not be defined if error is very early.
+            pass
+        print(f"JSON Decode Error processing VMESS link {config_link[:30]}...: {e}. {decoded_str_preview}")
+        return None
     except Exception as e:
-        print(f"Error processing VMESS link {config_link[:30]}...: {e}")
+        print(f"Generic Error processing VMESS link {config_link[:30]}...: {e}")
         return None
 
 def process_vless(config_link, new_name):
@@ -107,12 +126,17 @@ def get_all_processed_configs():
                 current_configs_text = temp_decoded
                 print(f"Successfully decoded Base64 content from {url}")
             else:
-                current_configs_text = content
-        except Exception:
-            current_configs_text = content
+                # This case means Base64 decoding was successful, but the decoded content didn't look like typical config URLs.
+                # It's possible the original content *was* plain text and just happened to be valid Base64.
+                # Or, it's Base64 but not a list of configs. We'll assume it might be plain text if it doesn't fit the pattern.
+                print(f"Content from {url} decoded from Base64, but no standard config prefixes found. Treating as potential plain text.")
+                current_configs_text = content # Fallback to original content if decoded version isn't right
+        except Exception as e_base64:
+            # print(f"Could not decode Base64 from {url}: {e_base64}. Assuming plain text.")
+            current_configs_text = content # Assume plain text if not valid Base64
         
         individual_links = current_configs_text.strip().splitlines()
-        print(f"Found {len(individual_links)} potential links in {url}.")
+        print(f"Found {len(individual_links)} potential config lines in {url}.")
 
         for i, link in enumerate(individual_links):
             link = link.strip()
@@ -120,24 +144,28 @@ def get_all_processed_configs():
                 continue
             
             processed_link = None
+            original_link_prefix = link[:10] # For logging
+
             if link.startswith('vmess://'):
-                processed_link = process_vmess(link, NEW_CONFIG_NAME)
+                processed_link = process_vmess(link, f"{NEW_CONFIG_NAME}_{url_index+1}_{i+1}")
             elif link.startswith('vless://'):
-                processed_link = process_vless(link, NEW_CONFIG_NAME)
+                processed_link = process_vless(link, f"{NEW_CONFIG_NAME}_{url_index+1}_{i+1}")
             elif link.startswith('ss://'):
-                processed_link = process_shadowsocks(link, NEW_CONFIG_NAME)
+                processed_link = process_shadowsocks(link, f"{NEW_CONFIG_NAME}_{url_index+1}_{i+1}")
+            else:
+                print(f"Link {i+1} from {url} (starts with '{original_link_prefix}...') is not a recognized type, skipping.")
             
             if processed_link:
                 processed_config_links.append(processed_link)
             # else:
-                # print(f"Link {i} from {url} was not processable or not a recognized type: {link[:50]}")
+                # print(f"Link {i+1} from {url} (starts with '{original_link_prefix}...') failed processing or was skipped.")
 
 
     if not processed_config_links:
         print("No processable configs found after checking all URLs.")
-        return "" 
+        return "" # Return empty string, main function will handle file creation
 
-    print(f"Total processed configs: {len(processed_config_links)}")
+    print(f"Total processed configs successfully: {len(processed_config_links)}")
     final_subscription_content = "\n".join(processed_config_links)
     return base64.b64encode(final_subscription_content.encode('utf-8')).decode('utf-8')
 
@@ -145,25 +173,20 @@ def main():
     print("Starting configuration aggregation...")
     aggregated_configs_base64 = get_all_processed_configs()
     
-    if aggregated_configs_base64:
-        # Ensure the output directory exists if specified in OUTPUT_FILE_NAME (e.g., "subs/SHEN_SUB.txt")
-        output_dir = os.path.dirname(OUTPUT_FILE_NAME)
-        if output_dir and not os.path.exists(output_dir):
-            print(f"Creating output directory: {output_dir}")
-            os.makedirs(output_dir)
+    # Ensure the output directory exists if specified in OUTPUT_FILE_NAME
+    output_dir = os.path.dirname(OUTPUT_FILE_NAME)
+    if output_dir and not os.path.exists(output_dir):
+        print(f"Creating output directory: {output_dir}")
+        os.makedirs(output_dir)
             
-        with open(OUTPUT_FILE_NAME, 'w', encoding='utf-8') as f:
+    with open(OUTPUT_FILE_NAME, 'w', encoding='utf-8') as f:
+        if aggregated_configs_base64:
             f.write(aggregated_configs_base64)
-        print(f"Successfully wrote aggregated configs to {OUTPUT_FILE_NAME}")
-        print(f"Total length of Base64 output: {len(aggregated_configs_base64)}")
-    else:
-        print(f"No configs to write. {OUTPUT_FILE_NAME} will not be created or modified if it exists and is empty.")
-        # Optionally, create an empty file or ensure it's empty if no configs are found
-        # For now, if it's empty, it just doesn't write.
-        # If the GitHub Action expects the file to always exist, we might need to touch it:
-        # with open(OUTPUT_FILE_NAME, 'w', encoding='utf-8') as f:
-        #     f.write("") # Write empty string if no configs
-        # print(f"{OUTPUT_FILE_NAME} is empty as no configs were found.")
+            print(f"Successfully wrote aggregated configs to {OUTPUT_FILE_NAME}")
+            print(f"Total length of Base64 output: {len(aggregated_configs_base64)}")
+        else:
+            f.write("") # Write an empty string if no configs were found
+            print(f"No processable configs found. {OUTPUT_FILE_NAME} has been emptied or created empty.")
 
 
 if __name__ == '__main__':

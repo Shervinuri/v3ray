@@ -27,7 +27,7 @@ SUBS=(
 "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Splitted-By-Protocol/vless.txt"
 )
 
-# بنر ساده
+# بنر درشت
 clear
 echo -e "${WHITE}==============================${NC}"
 echo -e "${WHITE} V2ray CollecSHΞN™${NC}"

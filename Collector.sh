@@ -1,13 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - The Final Masterpiece Showcase
+# V2ray CollecSHΞN™ - The Final Compatible Showcase
 #
 # This is the definitive, non-functional, visual demonstration.
-# It features the classic green/gray progress bar, simulated
-# pre-flight checks, realistic testing simulation, and the mid-scan
-# stop feature ('S' key), all within the 100% stable,
-# flicker-free, and bug-free UI. This is the final version.
+# It uses a 100% compatible ASCII progress bar to prevent any
+# font rendering issues. All other features (stable UI, simulated
+# checks, 'S' key to stop) are perfected. This is the final version.
 #================================================================
 
 # --- CONFIGURATION ---
@@ -163,15 +162,17 @@ for CONFIG in "${CONFIGS_TO_TEST[@]}"; do
     print_at 6 3 "${C_CYAN}Checked: ${C_WHITE}$CHECKED_COUNT ${C_NC}| ${C_GREEN}Valid: ${C_WHITE}$VALID_COUNT ${C_NC}| ${C_RED}Failed: ${C_WHITE}$FAILED_COUNT ${C_NC}| ${C_YELLOW}Total: ${C_WHITE}$TOTAL_TO_TEST${C_NC}\033[K"
     if [[ "$TOTAL_TO_TEST" -gt 0 ]]; then
         percent=$(( CHECKED_COUNT * 100 / TOTAL_TO_TEST ))
-        bar_width=$((width - 10)); filled_len=$((percent * bar_width / 100))
+        bar_width=$((width - 12)); filled_len=$((percent * bar_width / 100))
         
-        # Classic green/gray progress bar
-        bar_bg=$(printf "%${bar_width}s" | tr ' ' '░')
-        bar_fill=$(printf "%${filled_len}s" | tr ' ' '█')
+        # --- FIXED: 100% Compatible ASCII Progress Bar ---
+        bar="["
+        for ((i=0; i<filled_len; i++)); do bar+="="; done
+        bar+=">"
+        for ((i=filled_len; i<bar_width-1; i++)); do bar+=" "; done
+        bar+="]"
         
-        print_at 19 5; echo -ne "${C_GRAY}${bar_bg}${C_NC}"
-        print_at 19 5; echo -ne "${C_GREEN}${bar_fill}${C_NC}"
-        print_at 19 3; echo -ne "${C_WHITE}${percent}%${C_NC} "
+        print_at 19 5; echo -ne "${C_GREEN}${bar}${C_NC}"
+        print_at 19 $((width-5)); echo -ne "${C_WHITE}${percent}%${C_NC} "
     fi
     
     tail -n 10 "$RESULTS_FILE" | nl -w1 -s' ' | while read -r num line; do

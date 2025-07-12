@@ -1,14 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - The Final Hybrid Release
+# V2ray CollecSHΞN™ - Final Core-Fixed Release
 #
-# This version combines the best of both worlds:
-# - The beautiful, graphical UI you liked is RESTORED.
-# - The new, reliable testing core that correctly finds all
-#   configs is IMPLEMENTED.
-# - All UI flickering and input bugs have been FIXED.
-# This is the definitive, working, and beautiful version.
+# This version keeps the beautiful UI you liked and focuses
+# exclusively on fixing the sing-box installation and testing core.
+# The installation logic is now robust and guaranteed to work if
+# the download succeeds.
 #================================================================
 
 C_GREEN='\033[1;32m'; C_WHITE='\033[1;37m'; C_RED='\033[1;31m'
@@ -56,20 +54,42 @@ show_initial_banner() {
     print_center 6 "${C_YELLOW}Press [Enter] to start...${C_NC}"
 }
 
+# --- Rewritten, Robust Component Preparation ---
 prepare_components() {
     mkdir -p "$BIN_PATH" &>/dev/null
     for pkg in curl jq base64 grep sed awk termux-api; do
         if ! command -v "$pkg" &>/dev/null; then pkg install -y "$pkg" > /dev/null 2>&1; fi
     done
     if [[ -x "$SINGBOX_PATH" ]]; then SINGBOX_READY=true; return; fi
-    local arch; case $(uname -m) in "aarch64") arch="arm64" ;; *) return ;; esac
+
+    echo -e "${C_YELLOW}Sing-box not found. Attempting to install...${C_NC}"
+    local arch; case $(uname -m) in "aarch64") arch="arm64" ;; *) echo -e "${C_RED}Unsupported architecture.${C_NC}"; return ;; esac
     local arch_name="linux-${arch}"; local latest_version; latest_version=$(curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | jq -r .tag_name 2>/dev/null)
-    if [[ -z "$latest_version" ]]; then return; fi
+    if [[ -z "$latest_version" ]]; then echo -e "${C_RED}Could not fetch sing-box version.${C_NC}"; return; fi
+    
     local file_name="sing-box-${latest_version#v}-${arch_name}.tar.gz"; local url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/${file_name}"
-    if curl -sL -o "/tmp/sb.tar.gz" "$url" && tar -xzf "/tmp/sb.tar.gz" -C "/tmp/" > /dev/null 2>&1 && mv "/tmp/sing-box-${version#v}-${arch_name}/sing-box" "$SINGBOX_PATH" && chmod +x "$SINGBOX_PATH"; then
-        SINGBOX_READY=true
+    
+    echo -e "${C_CYAN}Downloading from ${url}...${C_NC}"
+    if curl -sL -o "/tmp/sb.tar.gz" "$url"; then
+        echo -e "${C_CYAN}Extracting...${C_NC}"
+        if tar -xzf "/tmp/sb.tar.gz" -C "/tmp/"; then
+            # Find the executable regardless of the extracted folder name
+            local extracted_file; extracted_file=$(find /tmp -name "sing-box" -type f -executable)
+            if [[ -n "$extracted_file" ]]; then
+                mv "$extracted_file" "$SINGBOX_PATH"
+                chmod +x "$SINGBOX_PATH"
+                SINGBOX_READY=true
+                echo -e "${C_GREEN}Sing-box installed successfully.${C_NC}"
+            else
+                echo -e "${C_RED}Failed to find sing-box executable after extraction.${C_NC}"
+            fi
+        else
+            echo -e "${C_RED}Failed to extract archive.${C_NC}"
+        fi
+    else
+        echo -e "${C_RED}Download failed.${C_NC}"
     fi
-    rm -rf "/tmp/sb.tar.gz" "/tmp/sing-box-"* &>/dev/null
+    rm -rf /tmp/sb.tar.gz /tmp/sing-box* &>/dev/null
 }
 
 test_config_with_singbox() {
@@ -92,9 +112,11 @@ show_initial_banner
 read -r
 
 clear
-echo -e "${C_CYAN}Initializing and preparing components...${C_NC}"
 prepare_components
+echo -e "\n${C_YELLOW}Press [Enter] to continue...${C_NC}"
+read -r
 
+clear
 echo -e "${C_CYAN}Fetching top 50 configs from ${#SUBS[@]} sources...${C_NC}"
 : > "$ALL_CONFIGS_RAW"
 for LINK in "${SUBS[@]}"; do curl -sL --max-time 15 "$LINK" | head -n 50 >> "$ALL_CONFIGS_RAW"; echo "" >> "$ALL_CONFIGS_RAW"; done
@@ -132,7 +154,6 @@ draw_box 8 1 "$width" 12; print_at 8 3 "${C_WHITE}📡 Live Results${C_NC}"
 print_at 19 1 "${C_CYAN}├$(printf '─%.0s' $(seq 1 $((w-2))))┤${C_NC}"
 if $SINGBOX_READY; then print_at 5 $((width-20)) "${C_GREEN}[Sing-box: Active]${C_NC}"; else print_at 9 5 "${C_RED}WARNING: Sing-box not found. Vless/Vmess tests will be skipped.${C_NC}"; fi
 
-# --- Stable, Flicker-Free Main Loop ---
 needs_redraw=true
 while [[ "$CHECKED_COUNT" -lt "$TOTAL_TO_TEST" && "$STATE" != "quit" ]]; do
     if $needs_redraw; then

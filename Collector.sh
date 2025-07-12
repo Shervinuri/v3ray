@@ -23,7 +23,7 @@ STATUS_FILE="$WORKDIR/status.log"
 RESULTS_FILE="$WORKDIR/results.log"
 
 SUBS=(
-"https://raw.githubusercontent.com/liketolivefree/kobabi/main/sub.txt"
+"https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/v2ray/subs/sub1.txt"
 "https://raw.githubusercontent.com/liketolivefree/kobabi/main/sub.txt"
 "https://raw.githubusercontent.com/mahsanet/MahsaFreeConfig/main/mci/sub_3.txt"
 "https://raw.githubusercontent.com/Mohammadgb0078/IRV2ray/main/vless.txt"

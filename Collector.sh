@@ -1,23 +1,24 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - The Final Showcase Edition
+# V2ray CollecSHΞN™ - The Final Masterpiece Showcase
 #
-# This is a non-functional, visual demonstration script.
-# It uses the final, stable, beautiful UI and simulates a
-# realistic testing process with successful and failed pings.
-# It is guaranteed to be 100% stable, flicker-free, and bug-free.
+# This is the definitive, non-functional, visual demonstration.
+# It features the advanced progress bar, simulated pre-flight
+# checks, realistic testing simulation, and the mid-scan stop
+# feature, all within the 100% stable, flicker-free UI.
 #================================================================
 
 # --- CONFIGURATION ---
 C_GREEN='\033[1;32m'; C_WHITE='\033[1;37m'; C_RED='\033[1;31m'
 C_YELLOW='\033[1;33m'; C_CYAN='\033[1;36m'; C_GRAY='\033[90m'
+C_PALE_YELLOW='\033[0;33m'
 C_NC='\033[0m'
 
 WORKDIR="$HOME/collector_shen"
 FINAL_OUTPUT="$WORKDIR/valid_configs_demo.txt"
 
-# --- Communication & Temp Files ---
+# --- Temp Files ---
 ALL_CONFIGS_RAW="$WORKDIR/all_configs_raw.txt"
 ALL_CONFIGS_DECODED="$WORKDIR/all_configs_decoded.txt"
 FILTERED_CONFIGS="$WORKDIR/filtered_configs.txt"
@@ -78,13 +79,21 @@ show_initial_banner() { clear; tput civis; print_center 1 "${C_WHITE}===========
 show_initial_banner
 read -r
 
+# --- Simulated Pre-flight Checks ---
 clear
-echo -e "${C_CYAN}Initializing...${C_NC}"
-mkdir -p "$WORKDIR" &>/dev/null
-for pkg in curl jq base64 grep sed awk termux-api coreutils; do
-    if ! command -v "$pkg" &>/dev/null; then pkg install -y "$pkg" > /dev/null 2>&1; fi
-done
-sleep 1
+run_preflight_checks() {
+    local tasks=("Checking dependencies" "Locating sing-box core" "Verifying xray-core")
+    local y=5
+    for task in "${tasks[@]}"; do
+        print_center $y "${C_YELLOW}${task}...${C_NC}"
+        sleep 0.7
+        print_center $y "${C_YELLOW}${task}... ${C_GREEN}[✓]${C_NC}"
+        ((y++))
+    done
+    print_center $((y+1)) "${C_GREEN}All systems are ready!${C_NC}"
+    sleep 1
+}
+run_preflight_checks
 
 # --- Config Fetching ---
 clear
@@ -113,25 +122,36 @@ CONFIGS_TO_TEST=(); while IFS= read -r line; do CONFIGS_TO_TEST+=("$line"); done
 TOTAL_TO_TEST=${#CONFIGS_TO_TEST[@]}
 VALID_COUNT=0; CHECKED_COUNT=0; FAILED_COUNT=0
 
-print_center 20 "${C_YELLOW}Testing in progress... Press Ctrl+C to stop.${C_NC}"
+print_center 20 "${C_YELLOW}Testing in progress... Press Enter to stop & save.${C_NC}"
 
 for CONFIG in "${CONFIGS_TO_TEST[@]}"; do
+    # Non-blocking read for user input
+    read -t 0.01 -rsn1 key
+    if [[ "$key" == "" ]]; then
+        # Stop and show final path screen
+        clear
+        print_center 8 "${C_CYAN}📦${C_NC}"
+        print_center 10 "${C_GREEN}Congratulations! Your database created in:${C_NC}"
+        print_center 12 "${C_YELLOW}Honor_3th_virtualmachine/v2ray/vless.json${C_NC}"
+        echo ""; echo ""; echo "";
+        tput cnorm;
+        exit 0
+    fi
+
     ((CHECKED_COUNT++))
     host=$(echo "$CONFIG" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
     
     # --- Simulation Logic ---
-    # Make every 5th config fail to look realistic
-    if (( CHECKED_COUNT % 5 == 0 )); then
+    if (( RANDOM % 5 == 0 )); then
         ((FAILED_COUNT++))
         echo "${C_RED}✗ ${C_WHITE}${host:0:30} ${C_CYAN}- ${C_RED}Unreachable${C_NC}" >> "$RESULTS_FILE"
     else
-        # Simulate a successful ping
         ((VALID_COUNT++))
-        ping_ms=$(( ( RANDOM % 650 ) + 150 )) # Random ping between 150-800ms
+        ping_ms=$(( ( RANDOM % 650 ) + 150 ))
         remark="☬SHΞN™-${ping_ms}ms"
         remark_encoded=$(printf %s "$remark" | jq -sRr @uri 2>/dev/null)
         echo "${CONFIG}#${remark_encoded}" >> "$FINAL_OUTPUT"
-        echo "${C_GREEN}✓ ${C_WHITE}${host:0:30} ${C_CYAN}- ${C_YELLOW}${ping_ms}ms${C_NC}" >> "$RESULTS_FILE"
+        echo "${C_GREEN}✓ ${C_WHITE}${host:0:30} ${C_CYAN}- ${C_GREEN}${ping_ms}ms${C_NC}" >> "$RESULTS_FILE"
     fi
     
     # --- Update UI on every iteration ---
@@ -139,22 +159,25 @@ for CONFIG in "${CONFIGS_TO_TEST[@]}"; do
     if [[ "$TOTAL_TO_TEST" -gt 0 ]]; then
         percent=$(( CHECKED_COUNT * 100 / TOTAL_TO_TEST ))
         bar_width=$((width - 10)); filled_len=$((percent * bar_width / 100))
+        buffer_len=$((filled_len + 4)); ((buffer_len > bar_width)) && buffer_len=$bar_width
         
-        # Beautiful progress bar
+        # Advanced progress bar
         bar_bg=$(printf "%${bar_width}s" | tr ' ' '░')
+        bar_buffer=$(printf "%${buffer_len}s" | tr ' ' '▒')
         bar_fill=$(printf "%${filled_len}s" | tr ' ' '▓')
         
         print_at 19 5; echo -ne "${C_GRAY}${bar_bg}${C_NC}"
+        print_at 19 5; echo -ne "${C_PALE_YELLOW}${bar_buffer}${C_NC}"
         print_at 19 5; echo -ne "${C_GREEN}${bar_fill}${C_NC}"
         print_at 19 3; echo -ne "${C_WHITE}${percent}%${C_NC}"
     fi
     
-    # Update results window from file
     tail -n 10 "$RESULTS_FILE" | nl -w1 -s' ' | while read -r num line; do
         print_at $((8+num)) 3 "$line\033[K"
     done
     
-    sleep 0.1 # A small delay to make the process visible
+    # Randomized delay for natural feel
+    sleep "0.0$(( ( RANDOM % 5 ) + 4 ))"
 done
 
 # --- Final Summary ---

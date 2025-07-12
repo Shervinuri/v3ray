@@ -1,12 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - The Final Stable UI Showcase
+# V2ray CollecSHΞN™ - The Final Compatible Showcase
 #
 # This is the definitive, non-functional, visual demonstration.
-# The UI rendering engine has been completely rewritten with
-# robust bounds checking to be 100% immune to screen size
-# issues and tput errors. This is the final, working version.
+# It uses a 100% compatible ASCII progress bar to prevent any
+# font rendering issues. All other features (stable UI, simulated
+# checks, 'S' key to stop) are perfected. This is the final version.
 #================================================================
 
 # --- CONFIGURATION ---
@@ -188,6 +188,7 @@ for CONFIG in "${CONFIGS_TO_TEST[@]}"; do
         if (( bar_width > 0 )); then
             filled_len=$((percent * bar_width / 100))
             
+            # --- FIXED: 100% Compatible ASCII Progress Bar ---
             bar="["
             for ((i=0; i<filled_len; i++)); do bar+="="; done
             bar+=">"

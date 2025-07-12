@@ -7,7 +7,6 @@ RED='\033[1;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# مسیرها
 WORKDIR="$HOME/collector_shen"
 ALL_CONFIGS="$WORKDIR/all_configs.txt"
 MARKED="$WORKDIR/marked_configs.txt"
@@ -16,7 +15,6 @@ OUTPUT="$WORKDIR/valid_configs.txt"
 BIN_PATH="$HOME/.local/bin"
 SINGBOX="$BIN_PATH/sing-box"
 
-# لیست ساب‌لینک‌ها
 SUBS=(
 "https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/v2ray/subs/sub1.txt"
 "https://raw.githubusercontent.com/liketolivefree/kobabi/main/sub.txt"
@@ -42,7 +40,6 @@ for pkg in curl jq base64 grep sed awk; do
   fi
 done
 
-# نصب sing-box اگر موجود نبود
 install_singbox() {
   echo -e "${WHITE}Installing sing-box...${NC}"
   mkdir -p "$BIN_PATH"
@@ -59,15 +56,14 @@ install_singbox() {
   rm -rf sing-box*
   echo -e "${GREEN}sing-box installed.${NC}"
 }
+
 if ! command -v "$SINGBOX" &>/dev/null; then
   install_singbox || echo -e "${YELLOW}sing-box installation failed, fallback will be used.${NC}"
 fi
 
-# آماده‌سازی پوشه‌ها
 mkdir -p "$WORKDIR"
 : > "$ALL_CONFIGS"
 
-# دریافت و جمع‌آوری کانفیگ‌ها
 echo -e "${GREEN}Collecting configs...${NC}"
 for LINK in "${SUBS[@]}"; do
   RAW=$(curl -sL "$LINK")
@@ -78,16 +74,15 @@ for LINK in "${SUBS[@]}"; do
   fi
 done
 
-# فیلتر و ریمارک
 grep -Ei '^(vmess://|vless://|ss://)' "$ALL_CONFIGS" | sed 's/$/ #☬SHΞN™/' > "$MARKED"
 
-# انتخاب پروتکل
 echo -e "${WHITE}Select your protocol:${NC}"
 echo "1 : vless"
 echo "2 : vmess"
 echo "3 : shadowsocks"
 echo "4 : all"
 read -p "Enter choice [1-4]: " CHOICE
+
 case $CHOICE in
   1) PATTERN='^vless://';;
   2) PATTERN='^vmess://';;
@@ -96,20 +91,17 @@ case $CHOICE in
   *) echo "Invalid input"; exit 1;;
 esac
 
-# فیلتر براساس انتخاب
 grep -Ei "$PATTERN" "$MARKED" > "$SELECTED"
 : > "$OUTPUT"
 
-# تست اتصال واقعی
 echo -e "${WHITE}Scanning configs...${NC}"
 while IFS= read -r CONFIG; do
   URL=$(echo "$CONFIG" | grep -oE '((vless|vmess|ss)://[^ ]+)')
   ID=$(date +%s%N | cut -c1-13)
   TMP_JSON="$WORKDIR/tmp_$ID.json"
 
-  # تبدیل به فایل کانفیگ JSON برای sing-box
   if [[ "$URL" == vless://* ]]; then
-    HOST=$(echo "$URL" | cut -d@ -f2 | cut -d: -f1)
+    HOST=$(echo "$URL" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
     echo "{\"outbounds\":[{\"type\":\"vless\",\"server\":\"$HOST\",\"port\":443,\"uuid\":\"uuid-placeholder\",\"tls\":{}}]}" > "$TMP_JSON"
   elif [[ "$URL" == vmess://* ]]; then
     echo "$URL" | cut -d// -f2 | base64 -d 2>/dev/null > "$TMP_JSON"
@@ -118,18 +110,15 @@ while IFS= read -r CONFIG; do
     continue
   fi
 
-  # اگر sing-box نصب شده بود
   if command -v "$SINGBOX" &>/dev/null; then
     DELAY=$($SINGBOX run -c "$TMP_JSON" --test | grep -oE '[0-9]+ms' | head -n1 | tr -d 'ms')
     if [ -n "$DELAY" ] && [ "$DELAY" -ge 100 ] && [ "$DELAY" -le 700 ]; then
       echo "$CONFIG" >> "$OUTPUT"
-      echo -e "${GREEN}✓ $(echo "$URL" | cut -d@ -f2) - $DELAY ms${NC}"
+      echo -e "${GREEN}✓ $HOST - $DELAY ms${NC}"
     else
-      echo -e "${YELLOW}~ $(echo "$URL" | cut -d@ -f2) - Unstable${NC}"
+      echo -e "${YELLOW}~ $HOST - Unstable${NC}"
     fi
   else
-    # fallback با curl/ping
-    HOST=$(echo "$URL" | sed -E 's|.*//([^@:/]+).*|\1|' | head -n1)
     if ping -c1 -W1 "$HOST" &>/dev/null; then
       echo "$CONFIG" >> "$OUTPUT"
       echo -e "${GREEN}✓ $HOST (ping ok)${NC}"

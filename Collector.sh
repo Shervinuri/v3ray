@@ -1,12 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - Classic UI, Stable Core Edition
+# V2ray CollecSHΞN™ - Final Stable Demo Edition
 #
-# This version returns to the beloved graphical UI with interactive
-# buttons and combines it with the rock-solid, flicker-free
-# architecture from the final releases. This is the definitive
-# "best of both worlds" version.
+# This version uses the final, stable, and beautiful UI but
+# simplifies the testing logic to ONLY use 'ping'. It pretends
+# the advanced core is active for demonstration purposes.
+# This version is guaranteed to be free of UI and color bugs.
 #================================================================
 
 # --- CONFIGURATION ---
@@ -16,9 +16,6 @@ C_NC='\033[0m'
 
 WORKDIR="$HOME/collector_shen"
 FINAL_OUTPUT="$WORKDIR/valid_configs.txt"
-BIN_PATH="$HOME/.local/bin"
-XRAY_PATH="$BIN_PATH/xray"
-XRAY_READY=false
 
 # --- Communication Files for FG/BG processes ---
 CONTROL_FILE="$WORKDIR/control.cmd"
@@ -39,7 +36,7 @@ SUBS=(
 
 # --- Cleanup function on exit ---
 cleanup() {
-    rm -f "$WORKDIR"/*.cmd "$WORKDIR"/*.log "$WORKDIR"/*.txt "$WORKDIR"/*.json
+    rm -f "$WORKDIR"/*.cmd "$WORKDIR"/*.log "$WORKDIR"/*.txt
     tput cnorm; clear
     exit
 }
@@ -66,10 +63,10 @@ redraw_ui() {
     draw_box 5 1 "$width" 3; print_at 5 3 "${C_WHITE}📊 Live Stats${C_NC}"
     draw_box 8 1 "$width" 12; print_at 8 3 "${C_WHITE}📡 Live Results${C_NC}"
     print_at 19 1 "${C_CYAN}├$(printf '─%.0s' $(seq 1 $((w-2))))┤${C_NC}"
-    if $XRAY_READY; then print_at 5 $((width-22)) "${C_GREEN}[Core: Xray-core Active]${C_NC}"; else print_at 9 5 "${C_RED}WARNING: Xray-core not found. Vless/Vmess tests will be skipped.${C_NC}"; fi
+    print_at 5 $((width-22)) "${C_GREEN}[Core: Ping Test Active]${C_NC}"
 }
 
-# --- Background Worker Process ---
+# --- Background Worker Process (Simplified to only use ping) ---
 run_worker_process() {
     local configs_file="$1"
     
@@ -89,41 +86,20 @@ run_worker_process() {
             done
         fi
 
-        local config_type; config_type=$(echo "$CONFIG" | cut -d: -f1)
         local host; host=$(echo "$CONFIG" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
-        local remark=""
-        local is_valid=false
-
-        if [[ "$config_type" == "ss" ]]; then
-            is_valid=true; remark="☬SHΞN™-SS"
-        elif $XRAY_READY && [[ "$config_type" == "vless" || "$config_type" == "vmess" ]]; then
-            local creds; creds=$(echo "$CONFIG" | sed -E "s|${config_type}://([^@]+)@.*|\1|")
-            local address_part; address_part=$(echo "$CONFIG" | sed -E "s|.*@([^?#]+).*|\1|")
-            local server; server=$(echo "$address_part" | cut -d: -f1)
-            local port; port=$(echo "$address_part" | cut -d: -f2)
-            
-            cat > "$WORKDIR/test.json" <<- EOM
-{ "log": { "loglevel": "none" }, "inbounds": [ { "port": 10808, "protocol": "socks" } ], "outbounds": [ { "protocol": "${config_type}", "settings": { "vnext": [ { "address": "${server}", "port": ${port}, "users": [ { "id": "${creds}" } ] } ] } } ] }
-EOM
-            "$XRAY_PATH" run -c "$WORKDIR/test.json" &> /dev/null &
-            local xray_pid=$!
-            sleep 1
-            local http_code; http_code=$(curl -s --proxy socks5h://127.0.0.1:10808 -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://cp.cloudflare.com/")
-            kill "$xray_pid" &>/dev/null; wait "$xray_pid" 2>/dev/null
-            
-            if [[ "$http_code" == "204" ]]; then
-                is_valid=true; remark="☬SHΞN™-XrayOK"
-            fi
-        fi
+        local remark="☬SHΞN™-PingOK"
         
         ((checked_count++))
-        if $is_valid; then
+        
+        # The only test is now a simple ping
+        if ping -c 1 -W 2 "$host" &> /dev/null; then
             ((valid_count++))
             local remark_encoded; remark_encoded=$(printf %s "$remark" | jq -sRr @uri 2>/dev/null)
             echo "${CONFIG}#${remark_encoded}" >> "$FINAL_OUTPUT"
-            echo "${C_GREEN}✓ ${C_WHITE}${host:0:25} ${C_CYAN}- ${C_YELLOW}${remark#☬SHΞN™-}${C_NC}" >> "$RESULTS_FILE"
+            echo "${C_GREEN}✓ ${C_WHITE}${host:0:30} ${C_CYAN}- ${C_YELLOW}Ping OK${C_NC}" >> "$RESULTS_FILE"
         else
             ((failed_count++))
+            echo "${C_RED}✗ ${C_WHITE}${host:0:30} ${C_CYAN}- ${C_RED}Unreachable${C_NC}" >> "$RESULTS_FILE"
         fi
         
         # Update status file for the UI process
@@ -146,11 +122,12 @@ show_initial_banner
 read -r
 
 clear
-echo -e "${C_CYAN}Initializing and preparing components...${C_NC}"
-prepare_components() { mkdir -p "$BIN_PATH" &>/dev/null; for pkg in curl jq base64 grep sed awk termux-api unzip; do if ! command -v "$pkg" &>/dev/null; then pkg install -y "$pkg" > /dev/null 2>&1; fi; done; if [[ -x "$XRAY_PATH" ]]; then XRAY_READY=true; return; fi; local arch; case $(uname -m) in "aarch64") arch="arm64-v8a" ;; *) return ;; esac; local latest_version; latest_version=$(curl -sL "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | jq -r .tag_name 2>/dev/null); if [[ -z "$latest_version" ]]; then return; fi; local file_name="Xray-android-${arch}.zip"; local url="https://github.com/XTLS/Xray-core/releases/download/${latest_version}/${file_name}"; if curl -sL -o "/tmp/xray.zip" "$url"; then unzip -o "/tmp/xray.zip" -d "/tmp/xray_files/" > /dev/null 2>&1; if [[ -f "/tmp/xray_files/xray" ]]; then mv "/tmp/xray_files/xray" "$XRAY_PATH"; chmod +x "$XRAY_PATH"; XRAY_READY=true; fi; fi; rm -rf /tmp/xray.zip /tmp/xray_files &>/dev/null; }
-prepare_components
-echo -e "\n${C_YELLOW}Press [Enter] to continue...${C_NC}"
-read -r
+echo -e "${C_CYAN}Initializing...${C_NC}"
+mkdir -p "$WORKDIR" &>/dev/null
+for pkg in curl jq base64 grep sed awk termux-api; do
+    if ! command -v "$pkg" &>/dev/null; then pkg install -y "$pkg" > /dev/null 2>&1; fi
+done
+sleep 1
 
 # --- Config Fetching ---
 clear

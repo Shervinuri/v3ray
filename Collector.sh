@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# رنگ‌ها
+
 GREEN='\033[1;32m'
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -27,12 +27,17 @@ SUBS=(
 "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Splitted-By-Protocol/vless.txt"
 )
 
+
 clear
-echo -e "${WHITE}Collector ☬SHΞN™"
+if command -v figlet &>/dev/null; then
+  figlet -c "Collector ☬SHΞN™"
+else
+  echo -e "${WHITE}=== Collector ☬SHΞN™ ===${NC}"
+fi
 echo -e "${WHITE}Press Enter to update servers...${NC}"
 read
 
-# نصب ابزارهای پایه
+
 for pkg in curl jq base64 grep sed awk; do
   if ! command -v "$pkg" &>/dev/null; then
     echo -e "${YELLOW}Installing $pkg...${NC}"
@@ -40,25 +45,22 @@ for pkg in curl jq base64 grep sed awk; do
   fi
 done
 
+
 install_singbox() {
-  echo -e "${WHITE}Installing sing-box...${NC}"
   mkdir -p "$BIN_PATH"
-  ARCH=$(uname -m)
   ARCH_NAME="linux-arm64"
   VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | jq -r .tag_name)
   FILE="sing-box-${VERSION}-${ARCH_NAME}.tar.gz"
   URL="https://github.com/SagerNet/sing-box/releases/download/${VERSION}/${FILE}"
   cd "$BIN_PATH" || return 1
-  curl -L -o sb.tar.gz "$URL" || return 1
+  curl -sL -o sb.tar.gz "$URL" || return 1
   tar -xzf sb.tar.gz || return 1
   mv sing-box*/sing-box sing-box
   chmod +x sing-box
   rm -rf sing-box*
-  echo -e "${GREEN}sing-box installed.${NC}"
 }
-
 if ! command -v "$SINGBOX" &>/dev/null; then
-  install_singbox || echo -e "${YELLOW}sing-box installation failed, fallback will be used.${NC}"
+  install_singbox
 fi
 
 mkdir -p "$WORKDIR"
@@ -68,13 +70,14 @@ echo -e "${GREEN}Collecting configs...${NC}"
 for LINK in "${SUBS[@]}"; do
   RAW=$(curl -sL "$LINK")
   if echo "$RAW" | grep -qEi '^[A-Za-z0-9+/=]{20,}$'; then
-    echo "$RAW" | base64 -d 2>/dev/null >> "$ALL_CONFIGS"
+    echo "$RAW" | base64 -d 2>/dev/null | head -n 40 >> "$ALL_CONFIGS"
   else
-    echo "$RAW" >> "$ALL_CONFIGS"
+    echo "$RAW" | head -n 40 >> "$ALL_CONFIGS"
   fi
 done
 
-grep -Ei '^(vmess://|vless://|ss://)' "$ALL_CONFIGS" | sed 's/$/ #☬SHΞN™/' > "$MARKED"
+grep -Ei '^(vmess://|vless://|ss://)' "$ALL_CONFIGS" \
+  | sed -E 's/#.*/#☬SHΞN™/; t; s/$/#☬SHΞN™/' > "$MARKED"
 
 echo -e "${WHITE}Select your protocol:${NC}"
 echo "1 : vless"
@@ -94,38 +97,75 @@ esac
 grep -Ei "$PATTERN" "$MARKED" > "$SELECTED"
 : > "$OUTPUT"
 
-echo -e "${WHITE}Scanning configs...${NC}"
+
+declare -a WINDOW_LINES
+TOTAL=0
+VALID=0
+STATE="run"
+ANIM_POS=0
+DIRECTION="right"
+
+trap '' SIGINT
+
+print_window() {
+  tput sc
+  tput cup 10 0
+  for i in {0..5}; do
+    echo -ne "\033[K"
+    echo "${WINDOW_LINES[$i]}"
+  done
+  echo -ne "\033[K"
+  echo -e "${GREEN}✔ Valid: $VALID${NC} | ${RED}⏱ Checked: $TOTAL${NC}"
+  echo -ne "\033[K"
+  printf "☬"
+  for i in {0..30}; do
+    if [[ $i -eq $ANIM_POS ]]; then printf "☬"; else printf " "; fi
+  done
+  echo -ne "\r"
+  tput rc
+}
+
 while IFS= read -r CONFIG; do
+  ((TOTAL++))
+  [[ ${#WINDOW_LINES[@]} -ge 6 ]] && WINDOW_LINES=("${WINDOW_LINES[@]:1}")
   URL=$(echo "$CONFIG" | grep -oE '((vless|vmess|ss)://[^ ]+)')
   ID=$(date +%s%N | cut -c1-13)
   TMP_JSON="$WORKDIR/tmp_$ID.json"
+  HOST=$(echo "$URL" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
+  STATUS=""
 
-  if [[ "$URL" == vless://* ]]; then
-    HOST=$(echo "$URL" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
-    echo "{\"outbounds\":[{\"type\":\"vless\",\"server\":\"$HOST\",\"port\":443,\"uuid\":\"uuid-placeholder\",\"tls\":{}}]}" > "$TMP_JSON"
-  elif [[ "$URL" == vmess://* ]]; then
-    echo "$URL" | cut -d// -f2 | base64 -d 2>/dev/null > "$TMP_JSON"
+  if [[ "$URL" == vless://* || "$URL" == vmess://* ]]; then
+    if command -v "$SINGBOX" &>/dev/null; then
+      DELAY=$($SINGBOX run -c "$TMP_JSON" --test 2>/dev/null | grep -oE '[0-9]+ms' | head -n1 | tr -d 'ms')
+      [[ "$DELAY" =~ ^[0-9]+$ && "$DELAY" -ge 100 && "$DELAY" -le 800 ]] && {
+        STATUS="${GREEN}✓ $HOST - ${DELAY}ms${NC}"
+        echo "$CONFIG" >> "$OUTPUT"
+        ((VALID++))
+      } || STATUS="${YELLOW}~ $HOST unstable${NC}"
+    else
+      ping -c1 -W1 "$HOST" &>/dev/null && {
+        STATUS="${GREEN}✓ $HOST (ping ok)${NC}"
+        echo "$CONFIG" >> "$OUTPUT"
+        ((VALID++))
+      } || STATUS="${RED}✗ $HOST unreachable${NC}"
+    fi
   else
+    STATUS="${GREEN}✓ SS config added${NC}"
     echo "$CONFIG" >> "$OUTPUT"
-    continue
+    ((VALID++))
   fi
 
-  if command -v "$SINGBOX" &>/dev/null; then
-    DELAY=$($SINGBOX run -c "$TMP_JSON" --test | grep -oE '[0-9]+ms' | head -n1 | tr -d 'ms')
-    if [ -n "$DELAY" ] && [ "$DELAY" -ge 100 ] && [ "$DELAY" -le 700 ]; then
-      echo "$CONFIG" >> "$OUTPUT"
-      echo -e "${GREEN}✓ $HOST - $DELAY ms${NC}"
-    else
-      echo -e "${YELLOW}~ $HOST - Unstable${NC}"
-    fi
-  else
-    if ping -c1 -W1 "$HOST" &>/dev/null; then
-      echo "$CONFIG" >> "$OUTPUT"
-      echo -e "${GREEN}✓ $HOST (ping ok)${NC}"
-    else
-      echo -e "${RED}✗ $HOST unreachable${NC}"
-    fi
-  fi
+  WINDOW_LINES+=("$STATUS")
+  [[ "$STATE" == "stop" ]] && {
+    echo -e "\n${YELLOW}Paused. Enter 2 to resume or 3 to export and exit:${NC}"
+    read -r ACTION
+    [[ "$ACTION" == "2" ]] && STATE="run"
+    [[ "$ACTION" == "3" ]] && break
+  }
+  print_window
+  [[ "$DIRECTION" == "right" ]] && ((ANIM_POS++)) || ((ANIM_POS--))
+  [[ "$ANIM_POS" -ge 30 ]] && DIRECTION="left"
+  [[ "$ANIM_POS" -le 0 ]] && DIRECTION="right"
 done < "$SELECTED"
 
-echo -e "${WHITE}✔ Done! Saved to:${NC} ${GREEN}$OUTPUT${NC}"
+echo -e "\n${WHITE}✔ Done! Saved to:${NC} ${GREEN}$OUTPUT${NC}"

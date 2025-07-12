@@ -1,13 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - The Final Masterpiece (All Bugs Fixed)
+# V2ray CollecSHΞN™ - The Final Showcase (Non-Stop Scan)
 #
 # This is the definitive, non-functional, visual demonstration.
 # It uses the final, stable, beautiful UI and simulates a
-# realistic testing process. All previously reported bugs,
-# including the startup flicker and the stop/save/copy flow,
-# have been fixed with a complete architectural rewrite.
+# realistic testing process. The "stop on enter" feature has
+# been REMOVED as requested. The scan now runs to completion.
 #================================================================
 
 # --- CONFIGURATION ---
@@ -127,26 +126,9 @@ CONFIGS_TO_TEST=(); while IFS= read -r line; do CONFIGS_TO_TEST+=("$line"); done
 TOTAL_TO_TEST=${#CONFIGS_TO_TEST[@]}
 VALID_COUNT=0; CHECKED_COUNT=0; FAILED_COUNT=0
 
-print_center 20 "${C_YELLOW}Testing in progress... Press Enter to stop & save.${C_NC}"
+print_center 20 "${C_YELLOW}Testing in progress... Press Ctrl+C to stop.${C_NC}"
 
 for CONFIG in "${CONFIGS_TO_TEST[@]}"; do
-    # Non-blocking read for user input
-    read -t 0.01 -rsn1 key
-    if [[ "$key" == "" ]]; then
-        # --- FIXED: Stop and Save/Copy Flow ---
-        clear
-        print_center 8 "${C_CYAN}📦${C_NC}"
-        print_center 10 "${C_GREEN}Congratulations! Your database created in:${C_NC}"
-        print_center 12 "${C_YELLOW}Honor_3th_virtualmachine/v2ray/vless.json${C_NC}"
-        print_center 14 "${C_PALE_YELLOW}Press Enter again to copy to clipboard...${C_NC}"
-        read -r
-        termux-clipboard-set < "$FINAL_OUTPUT"
-        print_center 14 "${C_GREEN}✔ Copied to clipboard successfully!         ${C_NC}"
-        print_center 16 "${C_GRAY}Press any key to exit.${C_NC}"
-        read -rsn1
-        cleanup
-    fi
-
     ((CHECKED_COUNT++))
     host=$(echo "$CONFIG" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
     

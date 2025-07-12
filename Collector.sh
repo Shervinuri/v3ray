@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-
+# رنگ‌ها
 GREEN='\033[1;32m'
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -27,17 +27,15 @@ SUBS=(
 "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Splitted-By-Protocol/vless.txt"
 )
 
-
+# بنر ساده
 clear
-if command -v figlet &>/dev/null; then
-  figlet -c "Collector ☬SHΞN™"
-else
-  echo -e "${WHITE}=== Collector ☬SHΞN™ ===${NC}"
-fi
+echo -e "${WHITE}==============================${NC}"
+echo -e "${WHITE} V2ray CollecSHΞN™${NC}"
+echo -e "${WHITE}==============================${NC}"
 echo -e "${WHITE}Press Enter to update servers...${NC}"
 read
 
-
+# نصب پیش‌نیازها
 for pkg in curl jq base64 grep sed awk; do
   if ! command -v "$pkg" &>/dev/null; then
     echo -e "${YELLOW}Installing $pkg...${NC}"
@@ -45,7 +43,7 @@ for pkg in curl jq base64 grep sed awk; do
   fi
 done
 
-
+# نصب سایلنت sing-box
 install_singbox() {
   mkdir -p "$BIN_PATH"
   ARCH_NAME="linux-arm64"
@@ -97,7 +95,7 @@ esac
 grep -Ei "$PATTERN" "$MARKED" > "$SELECTED"
 : > "$OUTPUT"
 
-
+# اسکن حرفه‌ای با باکس و انیمیشن
 declare -a WINDOW_LINES
 TOTAL=0
 VALID=0
@@ -137,7 +135,7 @@ while IFS= read -r CONFIG; do
   if [[ "$URL" == vless://* || "$URL" == vmess://* ]]; then
     if command -v "$SINGBOX" &>/dev/null; then
       DELAY=$($SINGBOX run -c "$TMP_JSON" --test 2>/dev/null | grep -oE '[0-9]+ms' | head -n1 | tr -d 'ms')
-      [[ "$DELAY" =~ ^[0-9]+$ && "$DELAY" -ge 100 && "$DELAY" -le 800 ]] && {
+      [[ "$DELAY" =~ ^[0-9]+$ && "$DELAY" -ge 100 && "$DELAY" -le 700 ]] && {
         STATUS="${GREEN}✓ $HOST - ${DELAY}ms${NC}"
         echo "$CONFIG" >> "$OUTPUT"
         ((VALID++))

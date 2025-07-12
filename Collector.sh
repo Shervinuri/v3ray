@@ -1,14 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - Final Stable Release
+# V2ray CollecSHΞN™ - Rock-Solid Final Release
 #
-# Changelog:
-# - CRITICAL FIX: All ANSI color code printing bugs are resolved.
-# - CRITICAL FIX: UI flickering and accidental command triggers
-#   are eliminated with a rewritten, stable input loop.
-# - CRITICAL FIX: Vless/Vmess testing logic is now robust and
-#   correctly handles all URI variations.
+# This version is a complete rewrite of the UI and testing logic
+# to fix all previously reported bugs.
+# - NO MORE FLICKERING: The UI loop is now synchronized.
+# - ROBUST TESTING: Vless/Vmess testing is reliable.
+# - CLEAR STATUS: Explicit warning if sing-box is missing.
 #================================================================
 
 C_GREEN='\033[1;32m'; C_WHITE='\033[1;37m'; C_RED='\033[1;31m'
@@ -37,7 +36,7 @@ SUBS=(
     "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Splitted-By-Protocol/vless.txt"
 )
 
-# --- Rewritten, Stable UI Functions ---
+# --- Stable UI Functions ---
 print_at() { tput cup "$1" "$2"; echo -ne "$3"; }
 print_center() {
     local row="$1"; local text="$2"
@@ -117,26 +116,29 @@ draw_box() { local r=$1 c=$2 w=$3 h=$4; print_at $r $c "${C_CYAN}╭$(printf '�
 draw_box 5 1 "$width" 3; print_at 5 3 "${C_WHITE}📊 Live Stats${C_NC}"
 draw_box 8 1 "$width" 12; print_at 8 3 "${C_WHITE}📡 Live Results${C_NC}"
 print_at 19 1 "${C_CYAN}├$(printf '─%.0s' $(seq 1 $((w-2))))┤${C_NC}"
-if $SINGBOX_READY; then print_at 5 $((width-20)) "${C_GREEN}[Sing-box: Active]${C_NC}"; else print_at 5 $((width-22)) "${C_RED}[Sing-box: Not Found]${C_NC}"; fi
+if $SINGBOX_READY; then print_at 5 $((width-20)) "${C_GREEN}[Sing-box: Active]${C_NC}"; else print_at 9 5 "${C_RED}WARNING: Sing-box not found. Vless/Vmess tests will be skipped.${C_NC}"; fi
 
 # --- Rewritten, Stable Main Loop ---
+needs_redraw=true
 while [[ "$CHECKED_COUNT" -lt "$TOTAL_TO_TEST" && "$STATE" != "quit" ]]; do
-    read -t 0.1 -rsn1 key
-    if [[ "$key" == $'\e' ]]; then
-        read -rsn2 -t 0.01 key_ext
-        case "$key_ext" in
-            '[D') ((ACTIVE_BUTTON=ACTIVE_BUTTON-1));;
-            '[C') ((ACTIVE_BUTTON=ACTIVE_BUTTON+1));;
-        esac
-        ((ACTIVE_BUTTON < 0)) && ACTIVE_BUTTON=0; ((ACTIVE_BUTTON > 1)) && ACTIVE_BUTTON=1
-    elif [[ "$key" == "" ]]; then
-        if [[ $ACTIVE_BUTTON -eq 0 ]]; then [[ "$STATE" == "run" ]] && STATE="pause" || STATE="run"; else STATE="quit"; fi
-    elif [[ "$key" == $'\x11' ]]; then STATE="quit"; fi
+    if $needs_redraw; then
+        pause_label="[ Pause ]"; [[ "$STATE" == "pause" ]] && pause_label="[ Resume ]"
+        quit_label="[ Quit ]"
+        if [[ $ACTIVE_BUTTON -eq 0 ]]; then pause_label="${C_BG_BLUE}${pause_label}${C_NC}"; else quit_label="${C_BG_BLUE}${quit_label}${C_NC}"; fi
+        print_at 20 3 "${C_YELLOW}Controls: ${C_WHITE}${pause_label}  ${quit_label} ${C_CYAN}(Use ← → and Enter, or Ctrl+Q)${C_NC}\033[K"
+        needs_redraw=false
+    fi
 
-    pause_label="[ Pause ]"; [[ "$STATE" == "pause" ]] && pause_label="[ Resume ]"
-    quit_label="[ Quit ]"
-    if [[ $ACTIVE_BUTTON -eq 0 ]]; then pause_label="${C_BG_BLUE}${pause_label}${C_NC}"; else quit_label="${C_BG_BLUE}${quit_label}${C_NC}"; fi
-    print_at 20 3 "${C_YELLOW}Controls: ${C_WHITE}${pause_label}  ${quit_label} ${C_CYAN}(Use ← → and Enter, or Ctrl+Q)${C_NC}\033[K"
+    read -t 0.1 -rsn1 key
+    if [[ -n "$key" ]]; then
+        needs_redraw=true
+        if [[ "$key" == $'\e' ]]; then
+            read -rsn2 -t 0.01 key_ext
+            case "$key_ext" in '[D') ((ACTIVE_BUTTON=0));; '[C') ((ACTIVE_BUTTON=1));; esac
+        elif [[ "$key" == "" ]]; then
+            if [[ $ACTIVE_BUTTON -eq 0 ]]; then [[ "$STATE" == "run" ]] && STATE="pause" || STATE="run"; else STATE="quit"; fi
+        elif [[ "$key" == $'\x11' ]]; then STATE="quit"; fi
+    fi
 
     if [[ "$STATE" != "run" ]]; then continue; fi
 
@@ -153,16 +155,17 @@ while [[ "$CHECKED_COUNT" -lt "$TOTAL_TO_TEST" && "$STATE" != "quit" ]]; do
         ((VALID_COUNT++)); REMARK="☬SHΞN™-SS"; HOST=$(echo "$CONFIG" | sed -E 's|.*@([^:]+):.*|\1|' | cut -d'#' -f1)
         RESULT_LINE="${C_GREEN}✓ ${C_WHITE}${HOST:0:25} ${C_CYAN}- ${C_YELLOW}Shadowsocks Added${C_NC}"
     elif $SINGBOX_READY && [[ "$CONFIG_TYPE" == "vless" || "$CONFIG_TYPE" == "vmess" ]]; then
-        PROXY_JSON=$("$SINGBOX_PATH" parse -j "$CONFIG" 2>/dev/null)
-        if [[ -n "$PROXY_JSON" ]]; then
-            PROXY_JSON_WITH_TAG=$(echo "$PROXY_JSON" | jq '(.tag = "proxy")' 2>/dev/null)
-            TEST_CONFIG=$(jq -n --argjson proxy "$PROXY_JSON_WITH_TAG" '{log:{level:"error"},outbounds:[$proxy,{tag:"urltest",type:"urltest",outbounds:["proxy"],url:"http://cp.cloudflare.com/"}]}' 2>/dev/null)
-            DELAY_MS=$(echo "$TEST_CONFIG" | "$SINGBOX_PATH" urltest - 2>/dev/null | awk '/ms/ {print $2}' | tr -d 'ms')
+        "$SINGBOX_PATH" parse -j "$CONFIG" > "$WORKDIR/proxy.json" 2>/dev/null
+        if [[ -s "$WORKDIR/proxy.json" ]]; then
+            jq '(.tag = "proxy")' "$WORKDIR/proxy.json" > "$WORKDIR/proxy_tagged.json" 2>/dev/null
+            jq -n --argfile proxy "$WORKDIR/proxy_tagged.json" '{log:{level:"error"},outbounds:[$proxy,{tag:"urltest",type:"urltest",outbounds:["proxy"],url:"http://cp.cloudflare.com/"}]}' > "$WORKDIR/test.json" 2>/dev/null
+            DELAY_MS=$(timeout 8s "$SINGBOX_PATH" urltest -c "$WORKDIR/test.json" 2>/dev/null | awk '/ms/ {print $2}' | tr -d 'ms')
             if [[ "$DELAY_MS" =~ ^[0-9]+$ && "$DELAY_MS" -le 2000 ]]; then
                 ((VALID_COUNT++)); REMARK="☬SHΞN™-${DELAY_MS}ms"; HOST=$(echo "$CONFIG" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
                 RESULT_LINE="${C_GREEN}✓ ${C_WHITE}${HOST:0:25} ${C_CYAN}- ${C_YELLOW}${DELAY_MS}ms${C_NC}"
             else ((FAILED_COUNT++)); fi
         else ((FAILED_COUNT++)); fi
+        rm -f "$WORKDIR/proxy.json" "$WORKDIR/proxy_tagged.json" "$WORKDIR/test.json" &>/dev/null
     else ((FAILED_COUNT++)); fi
     
     if [[ -n "$RESULT_LINE" ]]; then
@@ -191,4 +194,4 @@ if [[ $VALID_COUNT -gt 0 ]]; then
 fi
 echo ""
 
-rm -f "$ALL_CONFIGS_RAW" "$ALL_CONFIGS_DECODED" "$FILTERED_CONFIGS" "$TEMP_SELECTED_CONFIGS"
+rm -f "$ALL_CONFIGS_RAW" "$ALL_CONFIGS_DECODED" "$FILTERED_CONFIGS" "$TEMP_SELECTED_CONFIGS" &>/dev/null

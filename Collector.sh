@@ -1,12 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - Final Core-Fixed Release
+# V2ray CollecSHΞN™ - Xray-core Edition
 #
-# This version keeps the beautiful UI you liked and focuses
-# exclusively on fixing the sing-box installation and testing core.
-# The installation logic is now robust and guaranteed to work if
-# the download succeeds.
+# This version completely replaces the sing-box core with the
+# highly stable and reputable Xray-core to diagnose installation
+# and testing issues. The beautiful UI is retained.
 #================================================================
 
 C_GREEN='\033[1;32m'; C_WHITE='\033[1;37m'; C_RED='\033[1;31m'
@@ -16,13 +15,13 @@ C_NC='\033[0m'
 WORKDIR="$HOME/collector_shen"
 FINAL_OUTPUT="$WORKDIR/valid_configs.txt"
 BIN_PATH="$HOME/.local/bin"
-SINGBOX_PATH="$BIN_PATH/sing-box"
+XRAY_PATH="$BIN_PATH/xray" # Changed from SINGBOX_PATH
 ALL_CONFIGS_RAW="$WORKDIR/all_configs_raw.txt"
 ALL_CONFIGS_DECODED="$WORKDIR/all_configs_decoded.txt"
 FILTERED_CONFIGS="$WORKDIR/filtered_configs.txt"
 TEMP_SELECTED_CONFIGS="$WORKDIR/selected_for_test.txt"
-SINGBOX_TEST_CONFIG="$WORKDIR/singbox_test_config.json"
-SINGBOX_READY=false
+XRAY_TEST_CONFIG="$WORKDIR/xray_test_config.json" # Changed
+XRAY_READY=false # Changed
 
 SUBS=(
 "https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/v2ray/subs/sub1.txt"
@@ -54,54 +53,91 @@ show_initial_banner() {
     print_center 6 "${C_YELLOW}Press [Enter] to start...${C_NC}"
 }
 
-# --- Rewritten, Robust Component Preparation ---
+# --- Rewritten function to install Xray-core ---
 prepare_components() {
     mkdir -p "$BIN_PATH" &>/dev/null
-    for pkg in curl jq base64 grep sed awk termux-api; do
+    for pkg in curl jq base64 grep sed awk termux-api unzip; do
         if ! command -v "$pkg" &>/dev/null; then pkg install -y "$pkg" > /dev/null 2>&1; fi
     done
-    if [[ -x "$SINGBOX_PATH" ]]; then SINGBOX_READY=true; return; fi
+    if [[ -x "$XRAY_PATH" ]]; then XRAY_READY=true; return; fi
 
-    echo -e "${C_YELLOW}Sing-box not found. Attempting to install...${C_NC}"
-    local arch; case $(uname -m) in "aarch64") arch="arm64" ;; *) echo -e "${C_RED}Unsupported architecture.${C_NC}"; return ;; esac
-    local arch_name="linux-${arch}"; local latest_version; latest_version=$(curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | jq -r .tag_name 2>/dev/null)
-    if [[ -z "$latest_version" ]]; then echo -e "${C_RED}Could not fetch sing-box version.${C_NC}"; return; fi
+    echo -e "${C_YELLOW}Xray-core not found. Attempting to install...${C_NC}"
+    local arch; case $(uname -m) in "aarch64") arch="arm64-v8a" ;; *) echo -e "${C_RED}Unsupported architecture.${C_NC}"; return ;; esac
+    local latest_version; latest_version=$(curl -sL "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | jq -r .tag_name 2>/dev/null)
+    if [[ -z "$latest_version" ]]; then echo -e "${C_RED}Could not fetch Xray-core version.${C_NC}"; return; fi
     
-    local file_name="sing-box-${latest_version#v}-${arch_name}.tar.gz"; local url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/${file_name}"
+    local file_name="Xray-android-${arch}.zip"; local url="https://github.com/XTLS/Xray-core/releases/download/${latest_version}/${file_name}"
     
     echo -e "${C_CYAN}Downloading from ${url}...${C_NC}"
-    if curl -sL -o "/tmp/sb.tar.gz" "$url"; then
+    if curl -sL -o "/tmp/xray.zip" "$url"; then
         echo -e "${C_CYAN}Extracting...${C_NC}"
-        if tar -xzf "/tmp/sb.tar.gz" -C "/tmp/"; then
-            # Find the executable regardless of the extracted folder name
-            local extracted_file; extracted_file=$(find /tmp -name "sing-box" -type f -executable)
-            if [[ -n "$extracted_file" ]]; then
-                mv "$extracted_file" "$SINGBOX_PATH"
-                chmod +x "$SINGBOX_PATH"
-                SINGBOX_READY=true
-                echo -e "${C_GREEN}Sing-box installed successfully.${C_NC}"
-            else
-                echo -e "${C_RED}Failed to find sing-box executable after extraction.${C_NC}"
-            fi
+        unzip -o "/tmp/xray.zip" -d "/tmp/xray_files/" > /dev/null 2>&1
+        if [[ -f "/tmp/xray_files/xray" ]]; then
+            mv "/tmp/xray_files/xray" "$XRAY_PATH"
+            chmod +x "$XRAY_PATH"
+            XRAY_READY=true
+            echo -e "${C_GREEN}Xray-core installed successfully.${C_NC}"
         else
-            echo -e "${C_RED}Failed to extract archive.${C_NC}"
+            echo -e "${C_RED}Failed to find xray executable after extraction.${C_NC}"
         fi
     else
         echo -e "${C_RED}Download failed.${C_NC}"
     fi
-    rm -rf /tmp/sb.tar.gz /tmp/sing-box* &>/dev/null
+    rm -rf /tmp/xray.zip /tmp/xray_files &>/dev/null
 }
 
-test_config_with_singbox() {
+# --- Rewritten function to test with Xray-core ---
+test_config_with_xray() {
     local config_uri="$1"
-    cat > "$SINGBOX_TEST_CONFIG" <<- EOM
-{ "log": { "level": "error" }, "outbounds": [ { "tag": "proxy" }, { "tag": "urltest", "type": "urltest", "outbounds": ["proxy"], "url": "http://cp.cloudflare.com/" } ] }
+    local config_type; config_type=$(echo "$config_uri" | cut -d: -f1)
+    
+    # Parse URI
+    local creds; creds=$(echo "$config_uri" | sed -E "s|${config_type}://([^@]+)@.*|\1|")
+    local address_part; address_part=$(echo "$config_uri" | sed -E "s|.*@([^?#]+).*|\1|")
+    local server; server=$(echo "$address_part" | cut -d: -f1)
+    local port; port=$(echo "$address_part" | cut -d: -f2)
+
+    # Build config.json
+    cat > "$XRAY_TEST_CONFIG" <<- EOM
+{
+  "log": { "loglevel": "none" },
+  "inbounds": [
+    { "port": 10808, "protocol": "socks", "settings": { "auth": "noauth", "udp": true } }
+  ],
+  "outbounds": [
+    {
+      "protocol": "${config_type}",
+      "settings": {
+        "vnext": [
+          {
+            "address": "${server}",
+            "port": ${port},
+            "users": [ { "id": "${creds}" } ]
+          }
+        ]
+      }
+    }
+  ]
+}
 EOM
-    local proxy_json; proxy_json=$("$SINGBOX_PATH" parse -j "$config_uri" 2>/dev/null)
-    if [[ -z "$proxy_json" ]]; then echo "0"; return; fi
-    local final_config; final_config=$(jq --argjson proxy "$proxy_json" '.outbounds[0] = $proxy' "$SINGBOX_TEST_CONFIG")
-    local delay_ms; delay_ms=$(echo "$final_config" | "$SINGBOX_PATH" urltest - 2>/dev/null | awk '/ms/ {print $2}' | tr -d 'ms')
-    if [[ "$delay_ms" =~ ^[0-9]+$ && "$delay_ms" -le 2000 ]]; then echo "$delay_ms"; else echo "0"; fi
+
+    # Run xray in background
+    "$XRAY_PATH" run -c "$XRAY_TEST_CONFIG" &> /dev/null &
+    local xray_pid=$!
+    sleep 1 # Give xray time to start
+
+    # Test with curl through the local proxy
+    local http_code; http_code=$(curl -s --proxy socks5h://127.0.0.1:10808 -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://cp.cloudflare.com/")
+    
+    # Kill xray process
+    kill "$xray_pid" &>/dev/null
+    wait "$xray_pid" 2>/dev/null
+
+    if [[ "$http_code" == "204" ]]; then
+        echo "200" # Return a success code
+    else
+        echo "0" # Return a failure code
+    fi
 }
 
 #================================================================
@@ -152,7 +188,7 @@ draw_box() { local r=$1 c=$2 w=$3 h=$4; print_at $r $c "${C_CYAN}╭$(printf '�
 draw_box 5 1 "$width" 3; print_at 5 3 "${C_WHITE}📊 Live Stats${C_NC}"
 draw_box 8 1 "$width" 12; print_at 8 3 "${C_WHITE}📡 Live Results${C_NC}"
 print_at 19 1 "${C_CYAN}├$(printf '─%.0s' $(seq 1 $((w-2))))┤${C_NC}"
-if $SINGBOX_READY; then print_at 5 $((width-20)) "${C_GREEN}[Sing-box: Active]${C_NC}"; else print_at 9 5 "${C_RED}WARNING: Sing-box not found. Vless/Vmess tests will be skipped.${C_NC}"; fi
+if $XRAY_READY; then print_at 5 $((width-20)) "${C_GREEN}[Xray-core: Active]${C_NC}"; else print_at 9 5 "${C_RED}WARNING: Xray-core not found. Vless/Vmess tests will be skipped.${C_NC}"; fi
 
 needs_redraw=true
 while [[ "$CHECKED_COUNT" -lt "$TOTAL_TO_TEST" && "$STATE" != "quit" ]]; do
@@ -189,11 +225,11 @@ while [[ "$CHECKED_COUNT" -lt "$TOTAL_TO_TEST" && "$STATE" != "quit" ]]; do
     if [[ "$CONFIG_TYPE" == "ss" ]]; then
         ((VALID_COUNT++)); REMARK="☬SHΞN™-SS"; HOST=$(echo "$CONFIG" | sed -E 's|.*@([^:]+):.*|\1|' | cut -d'#' -f1)
         RESULT_LINE="${C_GREEN}✓ ${C_WHITE}${HOST:0:25} ${C_CYAN}- ${C_YELLOW}Shadowsocks Added${C_NC}"
-    elif $SINGBOX_READY && [[ "$CONFIG_TYPE" == "vless" || "$CONFIG_TYPE" == "vmess" ]]; then
-        DELAY_MS=$(test_config_with_singbox "$CONFIG")
-        if [[ "$DELAY_MS" -ne 0 ]]; then
-            ((VALID_COUNT++)); REMARK="☬SHΞN™-${DELAY_MS}ms"; HOST=$(echo "$CONFIG" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
-            RESULT_LINE="${C_GREEN}✓ ${C_WHITE}${HOST:0:25} ${C_CYAN}- ${C_YELLOW}${DELAY_MS}ms${C_NC}"
+    elif $XRAY_READY && [[ "$CONFIG_TYPE" == "vless" || "$CONFIG_TYPE" == "vmess" ]]; then
+        TEST_RESULT=$(test_config_with_xray "$CONFIG")
+        if [[ "$TEST_RESULT" -ne 0 ]]; then
+            ((VALID_COUNT++)); REMARK="☬SHΞN™-XrayOK"; HOST=$(echo "$CONFIG" | sed -E 's|.*@([^:/?#]+).*|\1|' | head -n1)
+            RESULT_LINE="${C_GREEN}✓ ${C_WHITE}${HOST:0:25} ${C_CYAN}- ${C_YELLOW}Xray Test OK${C_NC}"
         else ((FAILED_COUNT++)); fi
     else ((FAILED_COUNT++)); fi
     
@@ -224,4 +260,4 @@ if [[ $VALID_COUNT -gt 0 ]]; then
 fi
 echo ""
 
-rm -f "$ALL_CONFIGS_RAW" "$ALL_CONFIGS_DECODED" "$FILTERED_CONFIGS" "$TEMP_SELECTED_CONFIGS" "$SINGBOX_TEST_CONFIG" &>/dev/null
+rm -f "$ALL_CONFIGS_RAW" "$ALL_CONFIGS_DECODED" "$FILTERED_CONFIGS" "$TEMP_SELECTED_CONFIGS" "$XRAY_TEST_CONFIG" &>/dev/null

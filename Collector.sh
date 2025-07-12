@@ -1,10 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 #================================================================
-# V2ray CollecSHΞN™ - نسخه با رابط گرافیکی ترمینال
+# V2ray CollecSHΞN™ - نسخه نهایی با بنر اصلی و ضد خطا
 #
-# این اسکریپت کانفیگ‌های V2ray, Vmess و Shadowsocks را جمع‌آوری،
-# فیلتر و با یک رابط کاربری پیشرفته در ترمینال تست می‌کند.
+# این اسکریپت ظاهر اصلی شما را با یک رابط کاربری پایدار
+# و مقاوم در برابر خطا ترکیب می‌کند.
 #================================================================
 
 # --- تعریف رنگ‌ها ---
@@ -42,257 +42,157 @@ SUBS=(
 #================================================================
 # توابع رابط کاربری (UI Functions)
 #================================================================
+declare -a RESULTS_WINDOW
+RESULTS_MAX_LINES=10
 
-# متغیرهای سراسری برای رابط کاربری
-declare -a RESULTS_WINDOW # آرایه‌ای برای نگهداری خطوط نتایج
-RESULTS_MAX_LINES=8       # حداکثر تعداد خطوط در پنجره نتایج
-
-# چاپ متن در یک موقعیت مشخص
-print_at() {
-    tput cup "$1" "$2"
-    echo -ne "$3"
+print_at() { tput cup "$1" "$2"; echo -ne "$3"; }
+print_center() {
+    local term_width=$(tput cols)
+    local padding=$(((term_width - ${#1}) / 2))
+    printf "%*s%s\n" "$padding" '' "$1"
 }
 
-# رسم کادر در صفحه
-draw_box() {
-    local row=$1 col=$2 width=$3 height=$4
-    local top_left="╭" bottom_left="╰" top_right="╮" bottom_right="╯"
-    local horizontal="─" vertical="│"
-
-    # رسم خط بالا
-    print_at "$row" "$col" "${C_CYAN}${top_left}"
-    for ((i=0; i<width-2; i++)); do echo -n "$horizontal"; done
-    echo -n "${top_right}${C_NC}"
-
-    # رسم خطوط عمودی
-    for ((i=1; i<height-1; i++)); do
-        print_at $((row+i)) "$col" "${C_CYAN}${vertical}${C_NC}"
-        print_at $((row+i)) $((col+width-1)) "${C_CYAN}${vertical}${C_NC}"
-    done
-
-    # رسم خط پایین
-    print_at $((row+height-1)) "$col" "${C_CYAN}${bottom_left}"
-    for ((i=0; i<width-2; i++)); do echo -n "$horizontal"; done
-    echo -n "${bottom_right}${C_NC}"
-}
-
-# راه‌اندازی و رسم ساختار کلی رابط کاربری
-setup_ui() {
+# بنر اصلی به سبک شما
+show_banner_and_ui() {
     clear
-    tput civis # مخفی کردن نشانگر
-
-    local width
-    width=$(tput cols)
-    ((width--))
-
-    # 1. هدر
-    print_at 1 2 "${C_CYAN}V2ray CollecSHΞN™ ${C_WHITE}| ${C_YELLOW}نسخه گرافیکی${C_NC}"
-    print_at 2 1 "${C_CYAN}──────────────────────────────────────────────────────────────────${C_NC}"
-
-    # 2. کادر آمار
-    draw_box 3 1 40 4
-    print_at 3 3 "${C_WHITE}📊 آمار زنده${C_NC}"
-
-    # 3. کادر نتایج
-    draw_box 7 1 "$width" $((RESULTS_MAX_LINES + 2))
-    print_at 7 3 "${C_WHITE}📡 نتایج تست (کانفیگ‌های سالم)${C_NC}"
-
-    # 4. کادر وضعیت و راهنما
-    draw_box $((8 + RESULTS_MAX_LINES + 1)) 1 "$width" 3
-    print_at $((8 + RESULTS_MAX_LINES + 2)) 3 "${C_YELLOW}کلیدها: ${C_WHITE}[p] توقف/ادامه ${C_CYAN}| ${C_WHITE}[q] خروج و ذخیره${C_NC}"
+    tput civis
+    echo -e "${C_WHITE}"
+    print_center "=============================="
+    print_center " V2ray CollecSHΞN™"
+    print_center "=============================="
+    echo -e "${C_NC}"
+    
+    local width=$(tput cols); ((width--))
+    
+    # کادر آمار
+    draw_box 5 1 "$width" 3
+    print_at 5 3 "${C_WHITE}📊 آمار${C_NC}"
+    
+    # کادر نتایج
+    draw_box 8 1 "$width" $((RESULTS_MAX_LINES + 2))
+    print_at 8 3 "${C_WHITE}📡 نتایج زنده (کانفیگ‌های سالم)${C_NC}"
+    
+    # خط جداکننده
+    print_at $((9 + RESULTS_MAX_LINES)) 1 "${C_CYAN}├$(printf '─%.0s' $(seq 1 $((width-2))))┤${C_NC}"
+    
+    # راهنمای کلیدها
+    print_at $((10 + RESULTS_MAX_LINES)) 3 "${C_YELLOW}کنترل: ${C_WHITE}[p] توقف/ادامه ${C_CYAN}| ${C_WHITE}[q] خروج و ذخیره${C_NC}"
 }
 
-# به‌روزرسانی پنل آمار
+draw_box() {
+    local r=$1 c=$2 w=$3 h=$4
+    print_at $r $c "${C_CYAN}╭$(printf '─%.0s' $(seq 1 $((w-2))))╮${C_NC}"
+    for i in $(seq 1 $((h-2))); do
+        print_at $((r+i)) $c "${C_CYAN}│${C_NC}"
+        print_at $((r+i)) $((c+w-1)) "${C_CYAN}│${C_NC}"
+    done
+    print_at $((r+h-1)) $c "${C_CYAN}╰$(printf '─%.0s' $(seq 1 $((w-2))))╯${C_NC}"
+}
+
 update_status() {
-    local checked=$1 valid=$2 total=$3
-    local status_text="${C_BLUE}تست شده: ${C_WHITE}$checked${C_NC} / ${C_BLUE}کل: ${C_WHITE}$total ${C_CYAN}| ${C_GREEN}سالم: ${C_WHITE}$valid${C_NC}"
-    print_at 5 3 "$status_text\033[K"
+    local checked=$1 valid=$2 failed=$3 total=$4
+    local status_text="${C_BLUE}تست شده: ${C_WHITE}$checked${C_NC} ${C_CYAN}| ${C_GREEN}سالم: ${C_WHITE}$valid${C_NC} ${C_CYAN}| ${C_RED}خطا: ${C_WHITE}$failed${C_NC} ${C_CYAN}| ${C_YELLOW}کل: ${C_WHITE}$total${C_NC}"
+    print_at 6 3 "$status_text\033[K"
 }
 
-# افزودن یک خط نتیجه به پنجره نتایج
 add_result_line() {
-    # اگر پنجره پر است، خط اول را حذف کن
-    if ((${#RESULTS_WINDOW[@]} >= RESULTS_MAX_LINES)); then
-        RESULTS_WINDOW=("${RESULTS_WINDOW[@]:1}")
-    fi
+    ((${#RESULTS_WINDOW[@]} >= RESULTS_MAX_LINES)) && RESULTS_WINDOW=("${RESULTS_WINDOW[@]:1}")
     RESULTS_WINDOW+=("$1")
-
-    # پنجره نتایج را دوباره رسم کن
     for i in "${!RESULTS_WINDOW[@]}"; do
-        print_at $((8 + i)) 3 "${RESULTS_WINDOW[$i]}\033[K"
+        print_at $((9 + i)) 3 "${RESULTS_WINDOW[$i]}\033[K"
     done
 }
 
-# به‌روزرسانی نوار پیشرفت و وضعیت
 update_progress() {
-    local percent=$1 status_msg=$2 width
-    width=$(tput cols)
-    
-    local bar_width=$((width - 14))
+    local percent=$1
+    local width=$(tput cols)
+    local bar_width=$((width - 10))
     local filled_len=$((percent * bar_width / 100))
-    
-    local bar="["
-    for ((i=0; i<bar_width; i++)); do
-        if ((i < filled_len)); then bar+="${C_GREEN}█${C_NC}"; else bar+="${C_WHITE}·${C_NC}"; fi
-    done
-    bar+="]"
-
-    print_at $((8 + RESULTS_MAX_LINES)) 3 "${C_WHITE}${percent}% ${bar}${C_NC}\033[K"
-    print_at $((8 + RESULTS_MAX_LINES + 2)) 50 "${C_YELLOW}${status_msg}${C_NC}\033[K"
+    local bar="${C_GREEN}"
+    for ((i=0; i<filled_len; i++)); do bar+="▓"; done
+    bar+="${C_NC}${C_WHITE}"
+    for ((i=filled_len; i<bar_width; i++)); do bar+="░"; done
+    print_at $((9 + RESULTS_MAX_LINES)) 5 "${percent}% ${bar}"
 }
 
 #================================================================
 # توابع اصلی اسکریپت
 #================================================================
-
 # (توابع install_dependencies, install_singbox, create_test_config از اسکریپت قبلی بدون تغییر اینجا کپی می‌شوند)
-# ... (برای اختصار، این توابع در اینجا نمایش داده نمی‌شوند اما در فایل نهایی باید وجود داشته باشند) ...
-# Function to check and install necessary packages
-install_dependencies() {
-    echo -e "${C_YELLOW}Checking for required packages...${C_NC}"
-    local packages_needed=()
-    for pkg in curl jq base64 grep sed awk; do
-        if ! command -v "$pkg" &>/dev/null; then
-            packages_needed+=("$pkg")
-        fi
-    done
-
-    if [ ${#packages_needed[@]} -gt 0 ]; then
-        echo -e "${C_YELLOW}Installing: ${packages_needed[*]}${C_NC}"
-        pkg install -y "${packages_needed[@]}"
-    else
-        echo -e "${C_GREEN}All packages are already installed.${C_NC}"
-    fi
-}
-
-# Function to install or update sing-box
+install_dependencies() { for pkg in curl jq base64 grep sed awk; do if ! command -v "$pkg" &>/dev/null; then echo -e "${C_YELLOW}نصب $pkg...${C_NC}"; pkg install -y "$pkg"; fi; done; }
 install_singbox() {
-    echo -e "${C_YELLOW}Checking for sing-box...${C_NC}"
-    mkdir -p "$BIN_PATH"
-    local arch
-    case $(uname -m) in
-        "aarch64") arch="arm64" ;;
-        "armv7l" | "armv8l") arch="armv7" ;;
-        "x86_64") arch="amd64" ;;
-        *) echo -e "${C_RED}Unsupported architecture: $(uname -m)${C_NC}"; exit 1 ;;
-    esac
-    local arch_name="linux-${arch}"
-    local latest_version=$(curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | jq -r .tag_name)
-    if [[ -z "$latest_version" ]]; then echo -e "${C_RED}Could not fetch sing-box version.${C_NC}"; exit 1; fi
-    local installed_version=""
-    if [[ -f "$SINGBOX_PATH" ]]; then installed_version=$($SINGBOX_PATH version | awk '/sing-box version/ {print "v"$3}'); fi
-    if [[ "$installed_version" == "$latest_version" ]]; then echo -e "${C_GREEN}sing-box is up to date (${latest_version}).${C_NC}"; return; fi
-    echo -e "${C_YELLOW}Downloading sing-box ${latest_version}...${C_NC}"
-    local file_name="sing-box-${latest_version#v}-${arch_name}.tar.gz"
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/${file_name}"
-    curl -sL -o "/tmp/sb.tar.gz" "$download_url" && tar -xzf "/tmp/sb.tar.gz" -C "/tmp/" && \
-    mv "/tmp/sing-box-${latest_version#v}-${arch_name}/sing-box" "$SINGBOX_PATH" && \
-    chmod +x "$SINGBOX_PATH" && rm -rf "/tmp/sb.tar.gz" "/tmp/sing-box-"* && \
-    echo -e "${C_GREEN}sing-box installed successfully.${C_NC}" || { echo -e "${C_RED}Failed to install sing-box.${C_NC}"; exit 1; }
+    mkdir -p "$BIN_PATH"; if [[ -f "$SINGBOX_PATH" ]]; then echo -e "${C_GREEN}sing-box از قبل نصب است.${C_NC}"; return; fi
+    echo -e "${C_YELLOW}در حال نصب sing-box...${C_NC}"; local arch; case $(uname -m) in "aarch64") arch="arm64" ;; "armv7l" | "armv8l") arch="armv7" ;; "x86_64") arch="amd64" ;; *) echo -e "${C_RED}معماری پشتیبانی نمی‌شود: $(uname -m)${C_NC}"; exit 1 ;; esac
+    local arch_name="linux-${arch}"; local latest_version=$(curl -sL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | jq -r .tag_name); if [[ -z "$latest_version" ]]; then echo -e "${C_RED}دریافت نسخه sing-box ناموفق بود.${C_NC}"; exit 1; fi
+    local file_name="sing-box-${latest_version#v}-${arch_name}.tar.gz"; local url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/${file_name}"
+    curl -sL -o "/tmp/sb.tar.gz" "$url" && tar -xzf "/tmp/sb.tar.gz" -C "/tmp/" && mv "/tmp/sing-box-${latest_version#v}-${arch_name}/sing-box" "$SINGBOX_PATH" && chmod +x "$SINGBOX_PATH" && rm -rf "/tmp/sb.tar.gz" "/tmp/sing-box-"* && echo -e "${C_GREEN}sing-box با موفقیت نصب شد.${C_NC}" || { echo -e "${C_RED}نصب sing-box ناموفق بود.${C_NC}"; exit 1; }
 }
-
-# Function to create a temporary sing-box config for testing
 create_test_config() {
-    local config_uri="$1"
-    local temp_json_path="$2"
-    "$SINGBOX_PATH" parse -j "$config_uri" > "$WORKDIR/proxy.json"
-    if [[ ! -s "$WORKDIR/proxy.json" ]]; then return 1; fi
+    local config_uri="$1"; local temp_json_path="$2"
+    # از sing-box برای تبدیل URI به JSON استفاده می‌کنیم. اگر URI نامعتبر باشد، این دستور شکست می‌خورد.
+    if ! "$SINGBOX_PATH" parse -j "$config_uri" > "$WORKDIR/proxy.json"; then return 1; fi
+    # اگر فایل JSON خروجی خالی باشد، یعنی کانفیگ مشکل داشته است.
+    if [[ ! -s "$WORKDIR/proxy.json" ]]; then rm "$WORKDIR/proxy.json"; return 1; fi
+    # ساخت فایل کانفیگ نهایی برای تست
     jq --argfile proxy "$WORKDIR/proxy.json" \
-       '{log: {level: "error"}, inbounds: [{type: "tun", tag: "tun-in"}], outbounds: [$proxy, {tag: "urltest", type: "urltest", outbounds: ["proxy"], url: "http://cp.cloudflare.com/"}]}' \
+       '{log: {level: "error"}, outbounds: [$proxy, {tag: "urltest", type: "urltest", outbounds: ["proxy"], url: "http://cp.cloudflare.com/"}]}' \
        > "$temp_json_path"
     rm "$WORKDIR/proxy.json"
     return 0
 }
 
-
 # --- نقطه شروع اصلی اسکریپت ---
 
-# 0. آماده‌سازی اولیه
 clear
-echo -e "${C_CYAN}به V2ray CollecSHΞN خوش آمدید!${C_NC}"
-install_dependencies
-install_singbox
-mkdir -p "$WORKDIR"
+echo -e "${C_CYAN}به V2ray CollecSHΞN™ خوش آمدید!${C_NC}"
+install_dependencies; install_singbox; mkdir -p "$WORKDIR"; : > "$FINAL_OUTPUT"
+echo -e "${C_YELLOW}برای شروع جمع‌آوری و تست، Enter را بزنید...${C_NC}"; read -r
+
+clear; echo -e "\n${C_CYAN}1. در حال جمع‌آوری کانفیگ‌ها...${C_NC}"
 : > "$ALL_CONFIGS_RAW"
-: > "$FINAL_OUTPUT"
-echo -e "${C_YELLOW}برای شروع، Enter را بزنید...${C_NC}"
-read -r
+for LINK in "${SUBS[@]}"; do echo -e "   -> ${C_YELLOW}$LINK${C_NC}"; curl -sL --max-time 15 "$LINK" >> "$ALL_CONFIGS_RAW"; echo "" >> "$ALL_CONFIGS_RAW"; done
 
-# 1. جمع‌آوری کانفیگ‌ها
-clear
-echo -e "\n${C_CYAN}1. در حال جمع‌آوری کانفیگ‌ها از ${#SUBS[@]} منبع...${C_NC}"
-for LINK in "${SUBS[@]}"; do
-    echo -e "   -> ${C_YELLOW}$LINK${C_NC}"
-    curl -sL --max-time 15 "$LINK" >> "$ALL_CONFIGS_RAW"
-    echo "" >> "$ALL_CONFIGS_RAW"
-done
-
-# 2. پردازش و فیلتر کردن
-echo -e "${C_CYAN}2. در حال پردازش و آماده‌سازی کانفیگ‌ها...${C_NC}"
+echo -e "${C_CYAN}2. در حال پردازش و فیلتر کردن...${C_NC}"
 awk '{if ($0 ~ /^[A-Za-z0-9+/=]{20,}/) {print $0 | "base64 -d 2>/dev/null"} else {print $0}}' "$ALL_CONFIGS_RAW" > "$ALL_CONFIGS_DECODED"
 grep -E '^(vless|vmess|ss)://' "$ALL_CONFIGS_DECODED" | sed -e 's/#.*//' -e 's/\r$//' | sort -u > "$FILTERED_CONFIGS"
 TOTAL_FOUND=$(wc -l < "$FILTERED_CONFIGS")
 echo -e "${C_GREEN}   -> ${TOTAL_FOUND} کانفیگ منحصر به فرد پیدا شد.${C_NC}"
 
-# 3. انتخاب پروتکل توسط کاربر
 echo -e "\n${C_CYAN}3. پروتکل مورد نظر برای تست را انتخاب کنید:${C_NC}"
-echo -e "   ${C_WHITE}1) vless${C_NC}"
-echo -e "   ${C_WHITE}2) vmess${C_NC}"
-echo -e "   ${C_WHITE}3) shadowsocks (ss)${C_NC}"
-echo -e "   ${C_WHITE}4) همه پروتکل‌ها${C_NC}"
+echo -e "   ${C_WHITE}1) vless  2) vmess  3) shadowsocks (ss)  4) همه پروتکل‌ها${C_NC}"
 read -p "   انتخاب شما [1-4]: " CHOICE
-case $CHOICE in
-    1) PATTERN='^vless://';; 2) PATTERN='^vmess://';;
-    3) PATTERN='^ss://';; 4) PATTERN='^(vless|vmess|ss)://';;
-    *) echo -e "${C_RED}ورودی نامعتبر است.${C_NC}"; exit 1;;
-esac
+case $CHOICE in 1) P='^vless://';; 2) P='^vmess://';; 3) P='^ss://';; 4) P='^(vless|vmess|ss)://';; *) echo -e "${C_RED}نامعتبر.${C_NC}"; exit 1;; esac
 TEMP_SELECTED_CONFIGS="$WORKDIR/selected_for_test.txt"
-grep -E "$PATTERN" "$FILTERED_CONFIGS" > "$TEMP_SELECTED_CONFIGS"
+grep -E "$P" "$FILTERED_CONFIGS" > "$TEMP_SELECTED_CONFIGS"
 
 # 4. شروع فرآیند تست با رابط گرافیکی
 TOTAL_TO_TEST=$(wc -l < "$TEMP_SELECTED_CONFIGS")
-VALID_COUNT=0
-CHECKED_COUNT=0
-STATE="run"
-
-# خواندن ورودی کاربر در پس‌زمینه برای کنترل برنامه
-handle_input() {
-    while true; do
-        read -rsn1 input
-        if [[ "$input" == "p" || "$input" == "P" ]]; then
-            [[ "$STATE" == "run" ]] && STATE="pause" || STATE="run"
-        elif [[ "$input" == "q" || "$input" == "Q" ]]; then
-            STATE="quit"
-        fi
-    done
-}
+VALID_COUNT=0; CHECKED_COUNT=0; FAILED_COUNT=0; STATE="run"
+handle_input() { while true; do read -rsn1 i; if [[ "$i" == "p" ]]; then [[ "$STATE" == "run" ]] && STATE="pause" || STATE="run"; elif [[ "$i" == "q" ]]; then STATE="quit"; fi; done; }
 handle_input &
 INPUT_PID=$!
 trap 'tput cnorm; kill $INPUT_PID &>/dev/null; clear; exit' EXIT
-
-setup_ui
+show_banner_and_ui
 
 while IFS= read -r CONFIG || [[ -n "$CONFIG" ]]; do
-    while [[ "$STATE" == "pause" ]]; do
-        update_progress "$PERCENT" "متوقف شده..."
-        sleep 0.5
-    done
+    while [[ "$STATE" == "pause" ]]; do print_at $((10 + RESULTS_MAX_LINES)) 50 "${C_YELLOW}■ متوقف شده...${C_NC}"; sleep 0.5; done
     [[ "$STATE" == "quit" ]] && break
-
+    print_at $((10 + RESULTS_MAX_LINES)) 50 "${C_CYAN}▶ در حال تست...${C_NC}\033[K"
+    
     ((CHECKED_COUNT++))
     PERCENT=$((CHECKED_COUNT * 100 / TOTAL_TO_TEST))
-    update_status "$CHECKED_COUNT" "$VALID_COUNT" "$TOTAL_TO_TEST"
-    update_progress "$PERCENT" "در حال تست..."
+    update_status "$CHECKED_COUNT" "$VALID_COUNT" "$FAILED_COUNT" "$TOTAL_TO_TEST"
+    update_progress "$PERCENT"
 
     TMP_JSON="$WORKDIR/test_$(date +%s%N).json"
-    create_test_config "$CONFIG" "$TMP_JSON"
-    if [[ $? -ne 0 ]]; then
+    # اگر ساخت کانفیگ تست ناموفق بود (کانفیگ ورودی خراب است)، آن را به عنوان خطا ثبت کن و ادامه بده
+    if ! create_test_config "$CONFIG" "$TMP_JSON"; then
+        ((FAILED_COUNT++))
         rm -f "$TMP_JSON"
         continue
     fi
     
-    # اجرا تست با sing-box و گرفتن پینگ
-    DELAY_MS=$(timeout 8s "$SINGBOX_PATH" urltest -c "$TMP_JSON" -o "proxy" 2>/dev/null | awk '/ms/ {print $2}' | tr -d 'ms')
+    DELAY_MS=$(timeout 8s "$SINGBOX_PATH" urltest -c "$TMP_JSON" 2>/dev/null | awk '/ms/ {print $2}' | tr -d 'ms')
     rm -f "$TMP_JSON"
 
     if [[ "$DELAY_MS" =~ ^[0-9]+$ && "$DELAY_MS" -le 2000 ]]; then
@@ -301,23 +201,21 @@ while IFS= read -r CONFIG || [[ -n "$CONFIG" ]]; do
         REMARK="☬SHΞN™-${DELAY_MS}ms"
         REMARK_ENCODED=$(printf %s "$REMARK" | jq -sRr @uri)
         echo "${CONFIG}#${REMARK_ENCODED}" >> "$FINAL_OUTPUT"
-        
-        # نمایش نتیجه در پنجره نتایج
-        RESULT_LINE="${C_GREEN}✓ ${C_WHITE}${HOST} ${C_CYAN}- ${C_YELLOW}${DELAY_MS}ms${C_NC}"
+        RESULT_LINE="${C_GREEN}✓ ${C_WHITE}${HOST:0:25} ${C_CYAN}- ${C_YELLOW}${DELAY_MS}ms${C_NC}"
         add_result_line "$RESULT_LINE"
+    else
+        # اگر پینگ تایم اوت شد یا نامعتبر بود، آن را هم خطا در نظر بگیر
+        ((FAILED_COUNT++))
     fi
 done < "$TEMP_SELECTED_CONFIGS"
 
 # 5. پایان و نمایش خلاصه
-tput cnorm # نمایش دوباره نشانگر
+tput cnorm; kill $INPUT_PID &>/dev/null
 clear
-echo -e "\n\n${C_GREEN}===========================================${C_NC}"
-echo -e "${C_CYAN}          ✔ فرآیند تست کامل شد ✔          ${C_NC}"
-echo -e "${C_GREEN}===========================================${C_NC}\n"
-echo -e "  ${C_BLUE}تعداد کل کانفیگ‌های بررسی شده: ${C_WHITE}$CHECKED_COUNT${C_NC}"
-echo -e "  ${C_GREEN}تعداد کانفیگ‌های سالم یافت شده: ${C_WHITE}$VALID_COUNT${C_NC}\n"
-echo -e "  ${C_WHITE}✔ نتایج در فایل زیر ذخیره شد:${C_NC}"
-echo -e "  ${C_YELLOW}$FINAL_OUTPUT${C_NC}\n"
+show_banner_and_ui
+update_status "$CHECKED_COUNT" "$VALID_COUNT" "$FAILED_COUNT" "$TOTAL_TO_TEST"
+print_at $((10 + RESULTS_MAX_LINES)) 3 "${C_GREEN}✔ فرآیند تست کامل شد! نتایج در فایل زیر ذخیره شد:${C_NC}"
+print_at $((11 + RESULTS_MAX_LINES)) 3 "${C_YELLOW}$FINAL_OUTPUT${C_NC}\n\n"
 
 # پاکسازی فایل‌های موقت
 rm -f "$ALL_CONFIGS_RAW" "$ALL_CONFIGS_DECODED" "$FILTERED_CONFIGS" "$TEMP_SELECTED_CONFIGS"
